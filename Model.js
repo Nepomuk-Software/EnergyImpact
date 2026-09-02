@@ -27,6 +27,9 @@ function parseSample(raw) {
     source: "none",
     significant: false,
     cpuTempC: "",
+    cpuMhz: "",
+    cpuBusy: "",
+    cpuW: "",
     fanRpm: "",
     fanN: "",
     gpuName: "",
@@ -52,6 +55,9 @@ function parseSample(raw) {
     else if (key === "source") meta.source = val || "none"
     else if (key === "significant") meta.significant = val === "1"
     else if (key === "cpu_temp_c") meta.cpuTempC = val
+    else if (key === "cpu_mhz") meta.cpuMhz = val
+    else if (key === "cpu_busy") meta.cpuBusy = val
+    else if (key === "cpu_w") meta.cpuW = val
     else if (key === "fan_rpm") meta.fanRpm = val
     else if (key === "fan_n") meta.fanN = val
     else if (key === "gpu_name") meta.gpuName = val
@@ -107,18 +113,27 @@ function formatMhz(value) {
   return Math.round(n) + " MHz"
 }
 
+function chipLine(busy, watts, tempC, mhz) {
+  var bits = []
+  if (busy !== "" && busy != null && isFinite(Number(busy)))
+    bits.push(Math.round(Number(busy)) + "%")
+  var w = formatWatts(watts)
+  if (w) bits.push(w)
+  var t = formatTemp(tempC)
+  if (t) bits.push(t)
+  var f = formatMhz(mhz)
+  if (f) bits.push(f)
+  return bits.join("  ·  ")
+}
+
+function cpuLine(meta) {
+  if (!meta) return ""
+  return chipLine(meta.cpuBusy, meta.cpuW, meta.cpuTempC, meta.cpuMhz)
+}
+
 function gpuLine(meta) {
   if (!meta || !meta.gpuName) return ""
-  var bits = []
-  if (meta.gpuBusy !== "" && meta.gpuBusy != null)
-    bits.push(Math.round(Number(meta.gpuBusy)) + "%")
-  var w = formatWatts(meta.gpuW)
-  if (w) bits.push(w)
-  var t = formatTemp(meta.gpuTempC)
-  if (t) bits.push(t)
-  var mhz = formatMhz(meta.gpuMhz)
-  if (mhz) bits.push(mhz)
-  return bits.join("  ·  ")
+  return chipLine(meta.gpuBusy, meta.gpuW, meta.gpuTempC, meta.gpuMhz)
 }
 
 function sourceCaption(source, onBattery) {

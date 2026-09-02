@@ -27,8 +27,8 @@ omarchy bar move io.github.nepomuk-software.energyimpact --section right
 
 - **Bar** — a bolt. Dim on AC, solid on battery, accent when something looks
   like a hog. Nothing in the label.
-- **Panel** — pack watts (on battery), then **CPU temp, GPU load/watts/temp,
-  fan RPM**, then the top processes grouped by executable name.
+- **Panel** — pack watts (on battery), then **CPU and GPU** as
+  `load · watts · temp · clock`, plus fan RPM, then the top processes.
 - **Honest remainder** — process ~W is CPU-time share of pack or RAPL.
   GPU PPT is the chip's own sensor and is not folded into Chrome.
 

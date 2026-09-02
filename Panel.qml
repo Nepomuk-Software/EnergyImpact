@@ -35,6 +35,8 @@ Panel {
       lines.push("Pack " + Model.formatWatts(energy.meta.packW))
     else if (energy.meta.status)
       lines.push(energy.meta.status)
+    var cpu = Model.cpuLine(energy.meta)
+    if (cpu) lines.push("CPU  " + cpu)
     var gpu = Model.gpuLine(energy.meta)
     if (gpu) lines.push("GPU  " + gpu)
     var fan = Model.formatRpm(energy.meta.fanRpm)
@@ -185,7 +187,7 @@ Panel {
           Column {
             width: parent.width
             spacing: Style.spacing.labelGap
-            visible: energy.meta.cpuTempC || energy.meta.fanRpm || energy.meta.gpuName
+            visible: Model.cpuLine(energy.meta) || energy.meta.fanRpm || energy.meta.gpuName
 
             PanelSectionHeader {
               text: "MACHINE"
@@ -194,9 +196,9 @@ Panel {
             }
 
             InfoPair {
-              visible: energy.meta.cpuTempC !== ""
+              visible: Model.cpuLine(energy.meta) !== ""
               label: "CPU"
-              value: Model.formatTemp(energy.meta.cpuTempC)
+              value: Model.cpuLine(energy.meta)
             }
             InfoPair {
               visible: energy.meta.gpuName !== ""

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.nepomuk-software.energyimpact",
   "name": "Energy Impact",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "Nepomuk Software",
   "license": "MIT",
   "description": "Which processes are drawing power, plus fan, GPU load and temperatures, in the Omarchy bar. Pack watts on battery, RAPL when readable. No root daemon.",

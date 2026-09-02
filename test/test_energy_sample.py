@@ -100,6 +100,20 @@ class ParseTest(unittest.TestCase):
             self.assertEqual(hw["gpu_busy"], 15)
             self.assertAlmostEqual(hw["gpu_mhz"], 1251.0)
 
+    def test_cpu_busy_and_freq(self):
+        import tempfile
+        from pathlib import Path
+
+        self.assertAlmostEqual(es.cpu_busy_percent(100, 80), 20.0)
+        self.assertIsNone(es.cpu_busy_percent(0, 0))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for i, khz in enumerate((1000000, 3000000)):
+                cpu = root / ("cpu%d" % i) / "cpufreq"
+                cpu.mkdir(parents=True)
+                (cpu / "scaling_cur_freq").write_text("%d\n" % khz)
+            self.assertAlmostEqual(es.cpu_freq_mhz(root), 2000.0)
+
     def test_significant_gpu_busy_on_ac(self):
         rows = [{"name": "idle", "cpu": 0.5, "watts": None, "n": 1}]
         self.assertTrue(es.significant(rows, None, False, {"gpu_busy": 80}))

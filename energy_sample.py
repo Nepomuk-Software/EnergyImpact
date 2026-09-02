@@ -173,6 +173,7 @@ def battery_sample() -> dict:
 
 HWMON_ROOT = Path("/sys/class/hwmon")
 DRM_ROOT = Path("/sys/class/drm")
+CPU_ROOT = Path("/sys/devices/system/cpu")
 GPU_CHIPS = {"amdgpu", "nouveau", "i915", "xe"}
 
 
@@ -319,7 +320,33 @@ def nvidia_smi_gpu() -> dict | None:
     }
 
 
-def hardware_sample(hwmon_root: Path | None = None, drm_root: Path | None = None) -> dict:
+def cpu_freq_mhz(cpu_root: Path | None = None) -> float | None:
+    base = cpu_root or CPU_ROOT
+    if not base.is_dir():
+        return None
+    freqs = []
+    for cpu in sorted(base.glob("cpu[0-9]*")):
+        khz = read_int(cpu / "cpufreq" / "scaling_cur_freq")
+        if khz is None or khz <= 0:
+            continue
+        freqs.append(khz)
+    if not freqs:
+        return None
+    return (sum(freqs) / len(freqs)) / 1000.0
+
+
+def cpu_busy_percent(total_delta: int, idle_delta: int) -> float | None:
+    if total_delta <= 0:
+        return None
+    busy = max(0, total_delta - idle_delta)
+    return 100.0 * busy / total_delta
+
+
+def hardware_sample(
+    hwmon_root: Path | None = None,
+    drm_root: Path | None = None,
+    cpu_root: Path | None = None,
+) -> dict:
     chips = read_hwmon_tree(hwmon_root)
     rpm, fan_n = fan_rpm(chips)
     gpu = gpu_info(chips, drm_busy_percent(drm_root))
@@ -329,6 +356,7 @@ def hardware_sample(hwmon_root: Path | None = None, drm_root: Path | None = None
             gpu = nv
     return {
         "cpu_temp_c": cpu_temp_c(chips),
+        "cpu_mhz": cpu_freq_mhz(cpu_root),
         "fan_rpm": rpm,
         "fan_n": fan_n,
         "gpu_name": gpu["name"],
@@ -475,6 +503,9 @@ def sample(interval: float = 0.7) -> dict:
         "dt": dt,
         "rows": rows,
         "cpu_temp_c": hw["cpu_temp_c"],
+        "cpu_mhz": hw["cpu_mhz"],
+        "cpu_busy": cpu_busy_percent(total_delta, idle_delta),
+        "cpu_w": rapl_w,
         "fan_rpm": hw["fan_rpm"],
         "fan_n": hw["fan_n"],
         "gpu_name": hw["gpu_name"],
@@ -508,6 +539,9 @@ def emit(result: dict) -> None:
     kv("significant", "1" if result["significant"] else "0")
     kv("dt", result["dt"])
     kv("cpu_temp_c", result.get("cpu_temp_c"))
+    kv("cpu_mhz", result.get("cpu_mhz"))
+    kv("cpu_busy", result.get("cpu_busy"))
+    kv("cpu_w", result.get("cpu_w"))
     kv("fan_rpm", result.get("fan_rpm"))
     kv("fan_n", result.get("fan_n") or 0)
     kv("gpu_name", result.get("gpu_name") or "")
