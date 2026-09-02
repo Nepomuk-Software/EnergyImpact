@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "io.github.nepomuk-software.energyimpact",
   "name": "Energy Impact",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Nepomuk Software",
   "license": "MIT",
-  "description": "Which processes are drawing power, in the Omarchy bar. Pack watts on battery, RAPL when the kernel allows it, CPU share otherwise. No root daemon.",
+  "description": "Which processes are drawing power, plus fan, GPU load and temperatures, in the Omarchy bar. Pack watts on battery, RAPL when readable. No root daemon.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Energy Impact",
-    "description": "macOS-style 'apps using energy': top processes by CPU share, ~W from battery draw or RAPL. Quiet in the bar; the list is in the panel.",
+    "description": "macOS-style 'apps using energy': top processes by CPU share, ~W from battery or RAPL, plus fan RPM and GPU load/temp. Quiet in the bar.",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right",

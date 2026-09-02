@@ -10,7 +10,8 @@ import "Model.js" as Model
 //
 //   left = panel · middle = refresh
 //
-// No root. Watts are a share of pack draw (on battery) or RAPL (if readable).
+// No root. App watts are a share of pack draw or RAPL. GPU PPT and fan
+// RPM come from hwmon on the same sample.
 Panel {
   id: root
   moduleName: "io.github.nepomuk-software.energyimpact"
@@ -34,6 +35,10 @@ Panel {
       lines.push("Pack " + Model.formatWatts(energy.meta.packW))
     else if (energy.meta.status)
       lines.push(energy.meta.status)
+    var gpu = Model.gpuLine(energy.meta)
+    if (gpu) lines.push("GPU  " + gpu)
+    var fan = Model.formatRpm(energy.meta.fanRpm)
+    if (fan) lines.push("Fan  " + fan)
     if (energy.rows.length > 0) {
       var top = energy.rows[0]
       var extra = top.watts ? "  ~" + Model.formatWatts(top.watts) : "  " + Model.formatCpu(top.cpu)
@@ -75,10 +80,18 @@ Panel {
       var m = energy.meta
       var head = (m.onBattery ? "battery" : (m.status || "ac"))
       if (m.packW) head += " " + m.packW + "W"
-      if (energy.rows.length === 0) return head + " idle"
+      if (energy.rows.length === 0) {
+        var idle = head + " idle"
+        if (m.gpuBusy) idle += " gpu=" + m.gpuBusy + "%"
+        if (m.fanRpm) idle += " fan=" + Math.round(Number(m.fanRpm))
+        return idle
+      }
       var top = energy.rows[0]
-      return head + " top=" + top.name + " cpu=" + top.cpu.toFixed(1)
+      var extra = head + " top=" + top.name + " cpu=" + top.cpu.toFixed(1)
            + (top.watts ? " ~" + top.watts + "W" : "")
+      if (m.gpuBusy) extra += " gpu=" + m.gpuBusy + "%"
+      if (m.fanRpm) extra += " fan=" + Math.round(Number(m.fanRpm))
+      return extra
     }
   }
 
@@ -171,6 +184,34 @@ Panel {
 
           Column {
             width: parent.width
+            spacing: Style.spacing.labelGap
+            visible: energy.meta.cpuTempC || energy.meta.fanRpm || energy.meta.gpuName
+
+            PanelSectionHeader {
+              text: "MACHINE"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+            }
+
+            InfoPair {
+              visible: energy.meta.cpuTempC !== ""
+              label: "CPU"
+              value: Model.formatTemp(energy.meta.cpuTempC)
+            }
+            InfoPair {
+              visible: energy.meta.gpuName !== ""
+              label: "GPU"
+              value: Model.gpuLine(energy.meta)
+            }
+            InfoPair {
+              visible: energy.meta.fanRpm !== ""
+              label: energy.meta.fanN && Number(energy.meta.fanN) > 1 ? "Fans" : "Fan"
+              value: Model.formatRpm(energy.meta.fanRpm)
+            }
+          }
+
+          Column {
+            width: parent.width
             spacing: Style.space(6)
 
             PanelSectionHeader {
@@ -246,6 +287,34 @@ Panel {
           }
         }
       }
+    }
+  }
+
+  component InfoPair: Row {
+    property string label: ""
+    property string value: ""
+
+    width: parent.width
+    spacing: Style.space(8)
+
+    Text {
+      textFormat: Text.PlainText
+      text: label
+      color: root.foreground
+      opacity: 0.6
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.bodySmall
+    }
+    Item {
+      width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth - parent.spacing * 2)
+      height: 1
+    }
+    Text {
+      textFormat: Text.PlainText
+      text: value
+      color: root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.bodySmall
     }
   }
 }

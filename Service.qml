@@ -30,7 +30,15 @@ Item {
     packW: "",
     raplW: "",
     source: "none",
-    significant: false
+    significant: false,
+    cpuTempC: "",
+    fanRpm: "",
+    fanN: "",
+    gpuName: "",
+    gpuW: "",
+    gpuTempC: "",
+    gpuBusy: "",
+    gpuMhz: ""
   })
   property var rows: []
   property bool sampled: false

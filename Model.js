@@ -25,7 +25,15 @@ function parseSample(raw) {
     packW: "",
     raplW: "",
     source: "none",
-    significant: false
+    significant: false,
+    cpuTempC: "",
+    fanRpm: "",
+    fanN: "",
+    gpuName: "",
+    gpuW: "",
+    gpuTempC: "",
+    gpuBusy: "",
+    gpuMhz: ""
   }
   var rows = []
   var lines = text.split("\n")
@@ -43,6 +51,14 @@ function parseSample(raw) {
     else if (key === "rapl_w") meta.raplW = val
     else if (key === "source") meta.source = val || "none"
     else if (key === "significant") meta.significant = val === "1"
+    else if (key === "cpu_temp_c") meta.cpuTempC = val
+    else if (key === "fan_rpm") meta.fanRpm = val
+    else if (key === "fan_n") meta.fanN = val
+    else if (key === "gpu_name") meta.gpuName = val
+    else if (key === "gpu_w") meta.gpuW = val
+    else if (key === "gpu_temp_c") meta.gpuTempC = val
+    else if (key === "gpu_busy") meta.gpuBusy = val
+    else if (key === "gpu_mhz") meta.gpuMhz = val
     else if (key === "row") {
       var f = val.split("\t")
       if (!f[0]) continue
@@ -72,14 +88,47 @@ function formatCpu(value) {
   return n.toFixed(n < 10 ? 1 : 0) + "%"
 }
 
+function formatTemp(value) {
+  var n = Number(value)
+  if (!isFinite(n) || n <= 0) return ""
+  return Math.round(n) + "°"
+}
+
+function formatRpm(value) {
+  var n = Number(value)
+  if (!isFinite(n) || n <= 0) return ""
+  return Math.round(n) + " rpm"
+}
+
+function formatMhz(value) {
+  var n = Number(value)
+  if (!isFinite(n) || n <= 0) return ""
+  if (n >= 1000) return (n / 1000).toFixed(2) + " GHz"
+  return Math.round(n) + " MHz"
+}
+
+function gpuLine(meta) {
+  if (!meta || !meta.gpuName) return ""
+  var bits = []
+  if (meta.gpuBusy !== "" && meta.gpuBusy != null)
+    bits.push(Math.round(Number(meta.gpuBusy)) + "%")
+  var w = formatWatts(meta.gpuW)
+  if (w) bits.push(w)
+  var t = formatTemp(meta.gpuTempC)
+  if (t) bits.push(t)
+  var mhz = formatMhz(meta.gpuMhz)
+  if (mhz) bits.push(mhz)
+  return bits.join("  ·  ")
+}
+
 function sourceCaption(source, onBattery) {
   if (source === "rapl")
-    return "Watt column is a share of CPU-package energy (RAPL). Display and discrete GPU are not in it."
+    return "App watts are a share of CPU-package energy (RAPL). GPU PPT below is its own sensor."
   if (source === "battery")
-    return "Watt column is a share of pack draw by CPU time. Display, GPU and idle sit in the remainder."
+    return "App watts are a share of pack draw by CPU time. GPU, display and idle sit in the remainder."
   if (onBattery)
-    return "Pack draw is unavailable, so only CPU share is shown."
-  return "On AC without readable RAPL there is no system watt number — charging current is not draw. CPU share only."
+    return "Pack draw is unavailable, so apps show CPU share only. GPU watts are the chip's own sensor."
+  return "On AC without RAPL, apps show CPU share only. GPU PPT is measured separately."
 }
 
 function heroMeta(meta) {
@@ -87,6 +136,9 @@ function heroMeta(meta) {
     return formatWatts(meta.packW) + " from the pack"
   if (meta.source === "rapl" && meta.raplW)
     return "~" + formatWatts(meta.raplW) + " CPU package"
+  var gpu = formatWatts(meta.gpuW)
+  if (gpu)
+    return gpu + " GPU"
   if (meta.status)
     return String(meta.status)
   return "No battery"

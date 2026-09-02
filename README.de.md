@@ -20,10 +20,10 @@ omarchy plugin add https://github.com/Nepomuk-Software/EnergyImpact.git --enable
 ## Was du bekommst
 
 - **Bar** — ein Blitz. Matt an AC, voll auf Akku, Akzent wenn etwas hoggt.
-- **Panel** — Pack-Watt (auf Akku), dann die Top-Prozesse nach Executable,
-  mit CPU-Anteil und ~W, sobald eine Watt-Quelle da ist.
-- **Ehrlicher Rest** — Display, diskrete GPU und Idle werden Chrome *nicht*
-  in die Schuhe geschoben. Die Caption sagt das.
+- **Panel** — Pack-Watt (auf Akku), dann **CPU-Temp, GPU-Last/Watt/Temp,
+  Lüfter-RPM**, dann die Top-Prozesse nach Executable.
+- **Ehrlicher Rest** — Prozess-~W ist CPU-Zeit-Anteil am Pack oder RAPL.
+  GPU-PPT kommt vom Chip-Sensor und landet nicht bei Chrome.
 
 ## Settings
 

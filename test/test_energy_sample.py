@@ -59,6 +59,52 @@ class ParseTest(unittest.TestCase):
         self.assertIn("rows", result)
         self.assertIsInstance(result["rows"], list)
 
+    def test_hwmon_cpu_gpu_fan(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            k10 = root / "hwmon6"
+            k10.mkdir()
+            (k10 / "name").write_text("k10temp\n")
+            (k10 / "temp1_input").write_text("62750\n")
+            (k10 / "temp1_label").write_text("Tctl\n")
+            gpu = root / "hwmon5"
+            gpu.mkdir()
+            (gpu / "name").write_text("amdgpu\n")
+            (gpu / "power1_input").write_text("14801000\n")
+            (gpu / "temp1_input").write_text("56000\n")
+            (gpu / "temp1_label").write_text("edge\n")
+            (gpu / "freq1_input").write_text("1251000000\n")
+            fan_a = root / "hwmon1"
+            fan_a.mkdir()
+            (fan_a / "name").write_text("acpi_fan\n")
+            (fan_a / "fan1_input").write_text("3130\n")
+            fan_b = root / "hwmon9"
+            fan_b.mkdir()
+            (fan_b / "name").write_text("cros_ec\n")
+            (fan_b / "fan1_input").write_text("3130\n")
+            drm = root / "drm"
+            card = drm / "card1"
+            card.mkdir(parents=True)
+            (card / "device").mkdir()
+            (card / "device" / "gpu_busy_percent").write_text("15\n")
+            hw = es.hardware_sample(root, drm)
+            self.assertAlmostEqual(hw["cpu_temp_c"], 62.75)
+            self.assertEqual(hw["fan_rpm"], 3150)  # rounded to 50
+            self.assertEqual(hw["fan_n"], 1)
+            self.assertEqual(hw["gpu_name"], "amdgpu")
+            self.assertAlmostEqual(hw["gpu_w"], 14.801)
+            self.assertAlmostEqual(hw["gpu_temp_c"], 56.0)
+            self.assertEqual(hw["gpu_busy"], 15)
+            self.assertAlmostEqual(hw["gpu_mhz"], 1251.0)
+
+    def test_significant_gpu_busy_on_ac(self):
+        rows = [{"name": "idle", "cpu": 0.5, "watts": None, "n": 1}]
+        self.assertTrue(es.significant(rows, None, False, {"gpu_busy": 80}))
+        self.assertFalse(es.significant(rows, None, False, {"gpu_busy": 10}))
+
 
 if __name__ == "__main__":
     unittest.main()

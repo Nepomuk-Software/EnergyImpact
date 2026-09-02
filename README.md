@@ -27,10 +27,10 @@ omarchy bar move io.github.nepomuk-software.energyimpact --section right
 
 - **Bar** — a bolt. Dim on AC, solid on battery, accent when something looks
   like a hog. Nothing in the label.
-- **Panel** — pack watts (on battery), then the top processes grouped by
-  executable name, with CPU share and ~W when a watt source exists.
-- **Honest remainder** — display, discrete GPU and idle are *not* attributed
-  to Chrome. The caption says so.
+- **Panel** — pack watts (on battery), then **CPU temp, GPU load/watts/temp,
+  fan RPM**, then the top processes grouped by executable name.
+- **Honest remainder** — process ~W is CPU-time share of pack or RAPL.
+  GPU PPT is the chip's own sensor and is not folded into Chrome.
 
 ## What it is not
 

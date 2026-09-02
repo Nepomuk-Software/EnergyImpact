@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Attribute battery or RAPL watts to processes by CPU time.
 
-No root, no daemon. RAPL is used only when energy_uj is readable.
-On AC without RAPL, the list is CPU share only — charging current is
-not system draw.
+Also reads fan RPM, CPU/GPU temperatures and GPU load from hwmon
+(and nvidia-smi if there is no hwmon GPU). No root, no daemon.
+RAPL is used only when energy_uj is readable. On AC without RAPL,
+the process list is CPU share only — charging current is not draw.
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ from __future__ import annotations
 import argparse
 import glob
 import os
+import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -168,6 +171,174 @@ def battery_sample() -> dict:
     return out
 
 
+HWMON_ROOT = Path("/sys/class/hwmon")
+DRM_ROOT = Path("/sys/class/drm")
+GPU_CHIPS = {"amdgpu", "nouveau", "i915", "xe"}
+
+
+def read_hwmon_tree(root: Path | None = None) -> list[dict]:
+    base = root or HWMON_ROOT
+    chips: list[dict] = []
+    if not base.is_dir():
+        return chips
+    for entry in sorted(base.iterdir()):
+        try:
+            name = (entry / "name").read_text().strip()
+        except OSError:
+            continue
+        chip = {"name": name, "path": str(entry.resolve()) if entry.exists() else str(entry), "temps": [], "fans": [], "power_w": None, "freq_mhz": None}
+        for temp in sorted(entry.glob("temp*_input")):
+            idx = temp.name[4:].split("_")[0]
+            milli = read_int(temp)
+            if milli is None:
+                continue
+            label = ""
+            try:
+                label = (entry / ("temp%s_label" % idx)).read_text().strip()
+            except OSError:
+                label = ""
+            chip["temps"].append({"c": milli / 1000.0, "label": label or ("temp" + idx)})
+        for fan in sorted(entry.glob("fan*_input")):
+            rpm = read_int(fan)
+            if rpm is None or rpm <= 0:
+                continue
+            chip["fans"].append(rpm)
+        power = read_int(entry / "power1_input")
+        if power is None:
+            power = read_int(entry / "power1_average")
+        if power is not None and power >= 0:
+            chip["power_w"] = power / 1e6
+        freq = read_int(entry / "freq1_input")
+        if freq is not None and freq > 0:
+            chip["freq_mhz"] = freq / 1e6 if freq > 10000 else float(freq)
+        chips.append(chip)
+    return chips
+
+
+def cpu_temp_c(chips: list[dict]) -> float | None:
+    preferred = []
+    fallback = []
+    for chip in chips:
+        lname = chip["name"].lower()
+        cpuish = lname in ("k10temp", "coretemp", "zenpower", "cpu_thermal", "cpu-thermal")
+        for temp in chip["temps"]:
+            label = (temp["label"] or "").lower()
+            if "tctl" in label or "tdie" in label or label == "package id 0":
+                preferred.append(temp["c"])
+            elif cpuish:
+                fallback.append(temp["c"])
+            elif "cpu" in label and "ddr" not in label:
+                fallback.append(temp["c"])
+    if preferred:
+        return max(preferred)
+    if fallback:
+        return max(fallback)
+    return None
+
+
+def fan_rpm(chips: list[dict]) -> tuple[int | None, int]:
+    seen: set[int] = set()
+    for chip in chips:
+        for rpm in chip["fans"]:
+            seen.add(int(round(rpm / 50.0) * 50))
+    if not seen:
+        return None, 0
+    return max(seen), len(seen)
+
+
+def drm_busy_percent(drm_root: Path | None = None) -> int | None:
+    base = drm_root or DRM_ROOT
+    if not base.is_dir():
+        return None
+    for card in sorted(base.glob("card[0-9]*")):
+        if "-" in card.name:
+            continue
+        path = card / "device" / "gpu_busy_percent"
+        value = read_int(path)
+        if value is not None:
+            return max(0, min(100, value))
+    return None
+
+
+def gpu_info(chips: list[dict], busy: int | None) -> dict:
+    gpu = {
+        "name": "",
+        "w": None,
+        "temp_c": None,
+        "busy": busy,
+        "mhz": None,
+    }
+    for chip in chips:
+        if chip["name"].lower() not in GPU_CHIPS:
+            continue
+        gpu["name"] = chip["name"]
+        gpu["w"] = chip["power_w"]
+        gpu["mhz"] = chip["freq_mhz"]
+        if chip["temps"]:
+            gpu["temp_c"] = chip["temps"][0]["c"]
+        break
+    return gpu
+
+
+def nvidia_smi_gpu() -> dict | None:
+    if not shutil.which("nvidia-smi"):
+        return None
+    try:
+        proc = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,temperature.gpu,power.draw,utilization.gpu,clocks.sm",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=0.4,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    line = (proc.stdout or "").strip().splitlines()
+    if not line:
+        return None
+    parts = [p.strip() for p in line[0].split(",")]
+    if len(parts) < 5:
+        return None
+
+    def num(raw: str):
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
+    return {
+        "name": clamp_name(parts[0].split()[0] if parts[0] else "nvidia"),
+        "temp_c": num(parts[1]),
+        "w": num(parts[2]),
+        "busy": int(num(parts[3]) or 0) if num(parts[3]) is not None else None,
+        "mhz": num(parts[4]),
+    }
+
+
+def hardware_sample(hwmon_root: Path | None = None, drm_root: Path | None = None) -> dict:
+    chips = read_hwmon_tree(hwmon_root)
+    rpm, fan_n = fan_rpm(chips)
+    gpu = gpu_info(chips, drm_busy_percent(drm_root))
+    if not gpu["name"]:
+        nv = nvidia_smi_gpu()
+        if nv:
+            gpu = nv
+    return {
+        "cpu_temp_c": cpu_temp_c(chips),
+        "fan_rpm": rpm,
+        "fan_n": fan_n,
+        "gpu_name": gpu["name"],
+        "gpu_w": gpu["w"],
+        "gpu_temp_c": gpu["temp_c"],
+        "gpu_busy": gpu["busy"],
+        "gpu_mhz": gpu["mhz"],
+    }
+
+
 def rapl_energy_uj() -> int | None:
     root = Path("/sys/class/powercap")
     if not root.is_dir():
@@ -234,7 +405,12 @@ def attribute(
     return out
 
 
-def significant(rows: list[dict], pack_w: float | None, onbattery: bool) -> bool:
+def significant(rows: list[dict], pack_w: float | None, onbattery: bool, hw: dict | None = None) -> bool:
+    hw = hw or {}
+    if hw.get("gpu_busy") is not None and hw["gpu_busy"] >= 70:
+        return True
+    if hw.get("fan_rpm") is not None and hw["fan_rpm"] >= 5000:
+        return True
     if not onbattery:
         return False
     for row in rows:
@@ -285,6 +461,7 @@ def sample(interval: float = 0.7) -> dict:
 
     grouped = group_deltas(proc1, proc2)
     rows = attribute(grouped, total_delta, watts)
+    hw = hardware_sample()
     return {
         "present": bat["present"],
         "onbattery": bat["onbattery"],
@@ -297,7 +474,15 @@ def sample(interval: float = 0.7) -> dict:
         "idle_delta": idle_delta,
         "dt": dt,
         "rows": rows,
-        "significant": significant(rows, bat["pack_w"] if bat["onbattery"] else None, bat["onbattery"]),
+        "cpu_temp_c": hw["cpu_temp_c"],
+        "fan_rpm": hw["fan_rpm"],
+        "fan_n": hw["fan_n"],
+        "gpu_name": hw["gpu_name"],
+        "gpu_w": hw["gpu_w"],
+        "gpu_temp_c": hw["gpu_temp_c"],
+        "gpu_busy": hw["gpu_busy"],
+        "gpu_mhz": hw["gpu_mhz"],
+        "significant": significant(rows, bat["pack_w"] if bat["onbattery"] else None, bat["onbattery"], hw),
     }
 
 
@@ -322,6 +507,14 @@ def emit(result: dict) -> None:
     kv("source", result["source"])
     kv("significant", "1" if result["significant"] else "0")
     kv("dt", result["dt"])
+    kv("cpu_temp_c", result.get("cpu_temp_c"))
+    kv("fan_rpm", result.get("fan_rpm"))
+    kv("fan_n", result.get("fan_n") or 0)
+    kv("gpu_name", result.get("gpu_name") or "")
+    kv("gpu_w", result.get("gpu_w"))
+    kv("gpu_temp_c", result.get("gpu_temp_c"))
+    kv("gpu_busy", result.get("gpu_busy"))
+    kv("gpu_mhz", result.get("gpu_mhz"))
     for row in result["rows"]:
         watts = "" if row["watts"] is None else ("%.2f" % row["watts"])
         print("row=%s\t%.2f\t%s\t%d" % (row["name"], row["cpu"], watts, row["n"]))
