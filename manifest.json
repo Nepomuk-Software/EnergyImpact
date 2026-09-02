@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.nepomuk-software.energyimpact",
+  "name": "Energy Impact",
+  "version": "1.0.0",
+  "author": "Nepomuk Software",
+  "license": "MIT",
+  "description": "Which processes are drawing power, in the Omarchy bar. Pack watts on battery, RAPL when the kernel allows it, CPU share otherwise. No root daemon.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Energy Impact",
+    "description": "macOS-style 'apps using energy': top processes by CPU share, ~W from battery draw or RAPL. Quiet in the bar; the list is in the panel.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "hideOnAc": false,
+      "intervalSec": 4,
+      "idleIntervalSec": 15
+    },
+    "schema": [
+      {
+        "key": "hideOnAc",
+        "type": "boolean",
+        "label": "Hide on AC",
+        "description": "Hides the icon while charging or on wall power. The panel is unchanged.",
+        "defaultValue": false
+      },
+      {
+        "key": "intervalSec",
+        "type": "integer",
+        "label": "Sample interval while open (seconds)",
+        "description": "How often processes are sampled while the panel is open. Each sample takes under a second.",
+        "min": 2,
+        "max": 30,
+        "step": 1,
+        "defaultValue": 4
+      },
+      {
+        "key": "idleIntervalSec",
+        "type": "integer",
+        "label": "Sample interval while closed (seconds)",
+        "description": "How often to sample while the panel is closed, so the icon can light up on a hog. Slower on purpose.",
+        "min": 5,
+        "max": 120,
+        "step": 5,
+        "defaultValue": 15
+      }
+    ]
+  }
+}
