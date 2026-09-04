@@ -4,6 +4,8 @@ Which processes are drawing power, in the bar. Quiet until you open it.
 
 *(Deutsche Fassung: [README.de.md](README.de.md).)*
 
+![Preview](preview.png)
+
 On battery the panel ranks apps by CPU time and shows **~W** as a share of
 pack draw. If the kernel lets this user read RAPL `energy_uj`, that number
 is CPU-package energy instead. On AC without RAPL there is no honest system

@@ -4,6 +4,8 @@ Welche Prozesse ziehen Strom, in der Bar. Ruhig, bis du aufklappst.
 
 *(English version: [README.md](README.md) — die maßgebliche Fassung.)*
 
+![Vorschau](preview.png)
+
 Auf Akku sortiert das Panel nach CPU-Zeit und zeigt **~W** als Anteil am
 Pack-Zug. Wenn der Kernel `energy_uj` (RAPL) für diesen User lesbar macht,
 ist das CPU-Package-Energie. An der Steckdose ohne RAPL gibt es keine ehrliche
